@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>我的观影小站</title>
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<!-- ===================== 质感层 ===================== -->
+<div id="lightpool"></div>
+<div id="quotes" aria-hidden="true"></div>
+<div id="grain"></div>
+<div id="vignette"></div>
+
+<!-- ===================== 只读提示条 ===================== -->
+<div id="readonlyBar" class="hidden">
+  <b>只读模式</b>：当前没有连上本机服务，可以正常浏览，但「保存 / 匹配海报 / 上传海报」暂时不可用。
+  请关掉这个页面，改为双击项目里的 <b>启动.bat</b> 再打开。
+</div>
+
+<!-- ===================== 主舞台 ===================== -->
+<div id="stage">
+  <div id="world"></div>
+</div>
+
+<!-- ===================== 顶部 HUD ===================== -->
+<header id="hud">
+  <div class="brand">
+    <b>我的观影小站</b>
+    <span>MY PRIVATE CINEMA</span>
+  </div>
+
+  <div class="searchbox" id="searchBox">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+    </svg>
+    <input id="searchInput" type="text" autocomplete="off" spellcheck="false"
+           placeholder="搜我的全部收藏：片名 / 导演 / 主演 / 作者 / 年份…">
+    <button class="clear" id="searchClear" title="清空" aria-label="清空搜索">×</button>
+    <kbd>Ctrl K</kbd>
+  </div>
+
+  <div class="seg" id="typeSeg" role="group" aria-label="筛选类型">
+    <button data-type="all" class="active">全部</button>
+    <button data-type="movie">影视剧</button>
+    <button data-type="book">书籍</button>
+  </div>
+
+  <div class="hud-spacer"></div>
+
+  <span id="hudCount"></span>
+
+  <button class="hud-btn" id="sortBtn" title="切换排序">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M4 7h13M4 12h9M4 17h5"></path><path d="M18 13l3 3-3 3"></path>
+    </svg>
+    <span class="label" id="sortLabel">最近添加</span>
+  </button>
+
+  <button class="hud-btn" id="randomBtn" title="随机漫游（飞到某一部）">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+      <circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"></circle>
+      <circle cx="15.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"></circle>
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"></circle>
+    </svg>
+    <span class="label">随机漫游</span>
+  </button>
+
+  <button class="hud-btn" id="addBtn" title="新增条目">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+    <span class="label">添加</span>
+  </button>
+
+  <button class="hud-btn" id="replayBtn" title="重播开场序幕">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
+    </svg>
+  </button>
+
+  <button class="hud-btn icon" id="muteBtn" title="音乐开 / 关">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="muteIcon">
+      <path d="M5 9v6h3l4 4V5L8 9H5z"></path>
+      <path d="M16 9.5a4 4 0 0 1 0 5"></path>
+      <path d="M18.5 7a7.5 7.5 0 0 1 0 10"></path>
+    </svg>
+  </button>
+</header>
+
+<div id="hudMinimapHint">按住画面拖动 · 松手会滑行 · 点卡片看详情</div>
+
+<!-- ===================== 搜索面板 ===================== -->
+<aside id="searchPanel" aria-label="搜索结果">
+  <header>
+    <h2>搜索结果</h2>
+    <span class="count" id="searchCount"></span>
+  </header>
+  <div id="searchList"></div>
+</aside>
+
+<!-- ===================== 详情弹窗 ===================== -->
+<div class="modal" id="detailModal">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+    <button class="panel-close" data-close="detailModal" title="关闭">×</button>
+    <div class="detail-poster" id="detailPoster"></div>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- ===================== 海报管理弹窗 ===================== -->
+<div class="modal" id="coverModal">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="coverTitle">
+    <button class="panel-close" data-close="coverModal" title="关闭">×</button>
+    <h2 id="coverTitle">海报管理</h2>
+    <div class="sub" id="coverSub"></div>
+
+    <div class="cover-preview">
+      <div class="frame" id="coverFrame"></div>
+      <div class="meta" id="coverMeta"></div>
+    </div>
+
+    <div id="coverDrop">
+      把本地图片拖到这里，或点击选择文件
+      <span class="hint">也可以直接 Ctrl + V 粘贴截图</span>
+      <input type="file" id="coverFile" accept="image/*" hidden>
+    </div>
+
+    <div id="coverStatus"></div>
+
+    <div class="cover-actions">
+      <button class="btn gold" id="coverMatch">自动匹配海报</button>
+      <button class="btn" id="coverPick">手动上传</button>
+      <button class="btn" id="coverReset">恢复默认</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 新增条目弹窗 ===================== -->
+<div class="modal" id="editorModal">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+    <button class="panel-close" data-close="editorModal" title="关闭">×</button>
+    <h2 id="editorTitle">新增一条收藏</h2>
+
+    <div class="field">
+      <label for="edTitle">标题 <i>*必填</i></label>
+      <input type="text" id="edTitle" placeholder="例如：海上钢琴师">
+      <div class="tip" id="edTitleTip"></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="edType">类型</label>
+        <select id="edType">
+          <option value="movie">影视剧</option>
+          <option value="book">书籍</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="edYear">年份</label>
+        <input type="text" id="edYear" placeholder="1998">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="edUrl">豆瓣链接（填了就能自动匹配海报）</label>
+      <input type="url" id="edUrl" placeholder="https://movie.douban.com/subject/1292001/">
+      <div class="tip" id="edUrlTip"></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="edDoubanRating">豆瓣评分</label>
+        <input type="text" id="edDoubanRating" placeholder="9.3">
+      </div>
+      <div class="field">
+        <label>我的评分</label>
+        <div class="star-pick" id="edStars"></div>
+      </div>
+    </div>
+
+    <div class="field" id="edCreatorWrap">
+      <label for="edCreators" id="edCreatorsLabel">导演 / 主演</label>
+      <input type="text" id="edCreators" placeholder="朱塞佩·托纳多雷 / 蒂姆·罗斯">
+      <div class="tip" id="edCreatorsTip">用「 / 」分隔，第一段当导演，其余当主演。</div>
+    </div>
+
+    <div class="field">
+      <label for="edIntro">简介 / 其他信息（选填）</label>
+      <input type="text" id="edIntro" placeholder="留空也可以">
+    </div>
+
+    <div class="field">
+      <label for="edReview">我的评论（选填）</label>
+      <textarea id="edReview" placeholder="想写点什么…"></textarea>
+    </div>
+
+    <div class="editor-foot">
+      <button class="btn" data-close="editorModal">取消</button>
+      <button class="btn gold" id="edSave">保存并加入卡片墙</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 提示条 ===================== -->
+<div id="toast"></div>
+
+<!-- =====================================================================
+     开场序幕：全部内联，无额外请求
+     ===================================================================== -->
+<div id="prologue">
+  <div id="spotlight"></div>
+  <div id="poolFloor"></div>
+  <div id="dust" aria-hidden="true"></div>
+
+  <!-- 胶片倒计时 -->
+  <div id="countdown" aria-hidden="true">
+    <svg viewBox="0 0 200 200">
+      <circle class="cd-ring" cx="100" cy="100" r="86"/>
+      <line class="cd-cross" x1="100" y1="12" x2="100" y2="188"/>
+      <line class="cd-cross" x1="12" y1="100" x2="188" y2="100"/>
+      <path class="cd-sweep" id="cdSweep" d="M100 100 L100 14 A86 86 0 0 1 181 57 Z"/>
+    </svg>
+    <div class="cd-num" id="cdNum">3</div>
+  </div>
+
+  <!-- 蒸汽火车剪影 -->
+  <div id="trainWrap">
+    <svg viewBox="0 0 620 200" aria-hidden="true">
+      <defs>
+        <radialGradient id="lampGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#FFEFC8" stop-opacity=".95"/>
+          <stop offset="45%" stop-color="#E8B96B" stop-opacity=".4"/>
+          <stop offset="100%" stop-color="#E8B96B" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="beamG" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#F6E7C9" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#F6E7C9" stop-opacity=".5"/>
+        </linearGradient>
+      </defs>
+      <!-- 头灯：光晕 + 光束（先暗着，火车登场时点亮） -->
+      <g id="trainLight" opacity="0">
+        <path d="M126 90 L10 56 L10 148 L126 110 Z" fill="url(#beamG)"/>
+        <circle cx="126" cy="100" r="34" fill="url(#lampGlow)"/>
+        <circle cx="126" cy="100" r="9" fill="#FFEFC8"/>
+      </g>
+      <g fill="#05070C">
+        <!-- 铁轨 -->
+        <rect x="0" y="163" width="620" height="5" rx="2"/>
+        <rect x="0" y="176" width="620" height="3" opacity=".55"/>
+        <!-- 车厢 3 节 -->
+        <g>
+          <rect x="392" y="74" width="66" height="58" rx="6"/>
+          <rect x="462" y="74" width="66" height="58" rx="6"/>
+          <rect x="532" y="74" width="66" height="58" rx="6"/>
+          <rect x="392" y="86" width="206" height="4" opacity=".5" fill="#0E1220"/>
+        </g>
+        <!-- 驾驶室 -->
+        <rect x="300" y="36" width="92" height="100" rx="8"/>
+        <rect x="292" y="28" width="108" height="11" rx="5"/>
+        <rect x="318" y="56" width="30" height="30" rx="4" fill="#0E1220"/>
+        <!-- 锅炉 -->
+        <rect x="118" y="72" width="186" height="64" rx="30"/>
+        <!-- 烟囱 -->
+        <rect x="146" y="38" width="26" height="38"/>
+        <rect x="138" y="30" width="42" height="12" rx="4"/>
+        <!-- 车底架 -->
+        <rect x="116" y="132" width="278" height="9" rx="3"/>
+        <!-- 前照灯 -->
+        <circle cx="126" cy="100" r="10" fill="#E8B96B" opacity=".92"/>
+      </g>
+      <!-- 车轮 -->
+      <g fill="#05070C" stroke="#E8B96B" stroke-opacity=".28" stroke-width="1.6">
+        <g class="wheel"><circle cx="158" cy="151" r="16"/><path d="M158 137v28M144 151h28" stroke="#0B0F18" stroke-width="2"/></g>
+        <g class="wheel"><circle cx="212" cy="151" r="16"/><path d="M212 137v28M198 151h28" stroke="#0B0F18" stroke-width="2"/></g>
+        <g class="wheel"><circle cx="268" cy="151" r="16"/><path d="M268 137v28M254 151h28" stroke="#0B0F18" stroke-width="2"/></g>
+        <g class="wheel"><circle cx="336" cy="151" r="14"/></g>
+        <g class="wheel"><circle cx="425" cy="151" r="13"/></g>
+        <g class="wheel"><circle cx="495" cy="151" r="13"/></g>
+        <g class="wheel"><circle cx="565" cy="151" r="13"/></g>
+      </g>
+      <!-- 蒸汽 -->
+      <g fill="#C9D6E6" opacity=".5">
+        <circle class="puff" cx="160" cy="24" r="13"/>
+        <circle class="puff" cx="182" cy="12" r="9"/>
+        <circle class="puff" cx="146" cy="6" r="7"/>
+        <circle class="puff" cx="172" cy="0" r="11"/>
+        <circle class="puff" cx="152" cy="-8" r="8"/>
+        <circle class="puff" cx="190" cy="-4" r="6"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- 卓别林剪影 -->
+  <div id="charlieWrap">
+    <svg viewBox="0 0 200 200" aria-hidden="true">
+      <ellipse cx="100" cy="194" rx="44" ry="6" fill="#000" opacity=".5"/>
+      <g fill="#05070C">
+        <!-- 手杖 -->
+        <g id="charlieCane">
+          <path d="M140 96c11-3 18 5 14 12" fill="none" stroke="#05070C" stroke-width="4.5" stroke-linecap="round"/>
+          <line x1="142" y1="102" x2="150" y2="188" stroke="#05070C" stroke-width="4.5" stroke-linecap="round"/>
+        </g>
+        <!-- 燕尾下摆 -->
+        <path d="M86 132h28l10 30H76z"/>
+        <!-- 腿 -->
+        <rect x="90" y="150" width="6" height="34" rx="3"/>
+        <rect x="104" y="150" width="6" height="34" rx="3"/>
+        <!-- 圆头大鞋 -->
+        <ellipse cx="82" cy="188" rx="15" ry="7"/>
+        <ellipse cx="118" cy="188" rx="15" ry="7"/>
+        <!-- 躯干 -->
+        <path d="M82 84h36l-4 52H86z"/>
+        <!-- 左臂（挥手用） -->
+        <g id="charlieArm">
+          <path d="M84 92c-10 6-16 16-18 26" fill="none" stroke="#05070C" stroke-width="7" stroke-linecap="round"/>
+          <circle cx="66" cy="120" r="5"/>
+        </g>
+        <!-- 右臂 -->
+        <path d="M117 92c9 6 14 14 15 24" fill="none" stroke="#05070C" stroke-width="7" stroke-linecap="round"/>
+        <!-- 头 + 帽 + 胡子 -->
+        <g id="charlieBody">
+          <ellipse cx="100" cy="64" rx="17" ry="19"/>
+          <rect x="92" y="70" width="16" height="5" rx="2.5"/>
+          <ellipse cx="100" cy="45" rx="31" ry="6.5"/>
+        </g>
+        <g id="charlieHat">
+          <rect x="84" y="16" width="32" height="27" rx="6"/>
+          <rect x="81" y="40" width="38" height="6" rx="3"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <!-- 卡片弹出层 -->
+  <div id="prologueCards"></div>
+
+  <!-- 收尾光带（墙揭开时扫过） -->
+  <div id="lightSweep" aria-hidden="true"></div>
+
+  <!-- 启幕界面 -->
+  <div id="curtain">
+    <div class="title">我的观影小站</div>
+    <div class="subline">MY PRIVATE CINEMA</div>
+    <button id="prologueStart">点 击 启 幕</button>
+    <div class="cue">点一下，声音与画面一起亮起来</div>
+  </div>
+
+  <button id="prologueSkip">跳过序幕 ›</button>
+</div>
+
+<!-- ===================== 脚本（全部本地、按依赖顺序） ===================== -->
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/Draggable.min.js"></script>
+<script src="assets/vendor/InertiaPlugin.min.js"></script>
+<script src="data/library.js"></script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/audio.js"></script>
+<script src="assets/js/prologue.js"></script>
+<script src="assets/js/gallery.js"></script>
+<script src="assets/js/quotes.js"></script>
+<script src="assets/js/detail.js"></script>
+<script src="assets/js/covers.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/editor.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
