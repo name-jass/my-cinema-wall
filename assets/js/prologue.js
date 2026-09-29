@@ -102,102 +102,103 @@
     makeSprites();
     makeDust();
 
+    /* 精简片头：保留「幕布 → 胶片 → 追光 → 海报浮现 → 揭幕」五个动作。
+       卓别林与火车仍保留在 DOM 中供后续扩展，但不参与默认片头，避免视觉叙事过载。 */
     gsap.set(curtain, { opacity: 1, display: 'flex' });
-    gsap.set(spotlight, { opacity: 0, y: '-42vh', scaleY: 0.7, transformOrigin: '50% 0%' });
+    gsap.set(spotlight, { opacity: 0, y: '-34vh', scaleY: 0.82, transformOrigin: '50% 0%' });
     gsap.set(poolFloor, { opacity: 0 });
     gsap.set(dust, { opacity: 0 });
     gsap.set(countdown, { display: 'none', opacity: 0, scale: 1 });
-    gsap.set(charlie, { opacity: 0, y: 28, scale: 0.94, x: 0, rotate: 0 });
-    gsap.set([hat, cane, arm, body], { rotate: 0, y: 0, x: 0 });
-    gsap.set(train, { opacity: 0, xPercent: -125 });
-    gsap.set(trainLight, { opacity: 0 });
-    gsap.set(wheels, { rotate: 0 });
+    gsap.set(charlie, { opacity: 0 });
+    gsap.set(train, { opacity: 0 });
     gsap.set(lightSweep, { xPercent: -140, opacity: 0 });
-    gsap.set(hud, { opacity: 0, y: -16 });
-    gsap.set(sprites, { x: 0, y: 0, scale: 0.15, opacity: 0, rotate: 0, rotateY: 0 });
+    gsap.set(hud, { opacity: 0, y: -12 });
+    gsap.set(sprites, { x: 0, y: 0, scale: 0.72, opacity: 0, rotate: 0, rotateY: 0 });
 
-    tl = gsap.timeline({ onComplete: finish, defaults: { ease: 'power2.out' } });
-
-    /* ① 幕布退场 */
-    tl.to(curtain, { opacity: 0, y: -14, duration: 0.55, ease: 'power1.in',
-        onComplete: function () { curtain.style.display = 'none'; gsap.set(curtain, { y: 0 }); } }, 0)
-
-    /* ② 胶片倒计时 3 · 2 · 1（经典片头，扫秒扇面转一圈换一个数） */
-      .set(countdown, { display: 'block' }, 0.3)
-      .to(countdown, { opacity: 1, duration: 0.25 }, 0.3);
-    [3, 2, 1].forEach(function (n, idx) {
-      var t = 0.55 + idx * 0.62;
-      tl.call(function () { cdNum.textContent = n; }, null, t)
-        .fromTo(cdNum, { scale: 1.55, opacity: 0 },
-          { scale: 1, opacity: 1, duration: 0.28, ease: 'power3.out' }, t)
-        .fromTo(cdSweep, { rotation: 0 },
-          { rotation: 360, duration: 0.58, ease: 'none', svgOrigin: '100 100' }, t)
-        .to(cdNum, { opacity: 0.4, duration: 0.26, ease: 'power1.in' }, t + 0.34);
+    tl = gsap.timeline({
+      onComplete: finish,
+      defaults: { ease: 'power2.out' }
     });
-    tl.to(countdown, { opacity: 0, scale: 1.08, duration: 0.3, ease: 'power1.in' }, 2.45)
-      .set(countdown, { display: 'none' }, 2.8)
 
-    /* ③ 追光自上扫落 + 光池亮起 + 浮尘浮现 */
-      .to(spotlight, { opacity: 1, duration: 0.5 }, 2.5)
-      .to(spotlight, { y: '0vh', scaleY: 1, duration: 0.95, ease: 'power2.inOut' }, 2.6)
-      .to(poolFloor, { opacity: 1, duration: 0.7 }, 2.85)
-      .to(dust, { opacity: 1, duration: 1.2 }, 2.9)
+    /* ① 黑场标题：留一点呼吸时间，不急着“炫” */
+    tl.to(curtain, {
+      opacity: 0, y: -10, duration: 0.7, ease: 'power1.in',
+      onComplete: function () {
+        curtain.style.display = 'none';
+        gsap.set(curtain, { y: 0 });
+      }
+    }, 0.55)
 
-    /* ④ 卓别林登场：起身 → 呼吸微动 → 摘帽致意 → 转手杖 → 踉跄 → 挥手 */
-      .to(charlie, { opacity: 1, y: 0, scale: 1, duration: 1.0, ease: 'power3.out' }, 3.05)
-      .to(charlie, { y: 2.4, duration: 0.5, ease: 'sine.inOut', yoyo: true, repeat: 4 }, 4.05)
-      .to(hat, { y: -19, rotate: -12, duration: 0.4, ease: 'power2.out' }, 3.7)
-      .to(hat, { y: 0, rotate: 0, duration: 0.45, ease: 'power2.inOut' }, 4.16)
-      .to(cane, { rotate: 360, duration: 0.95, ease: 'back.inOut(1.2)' }, 4.0)
-      .to(charlie, { x: 11, rotate: 3, duration: 0.24, ease: 'power2.inOut' }, 4.9)
-      .to(charlie, { x: -9, rotate: -3, duration: 0.28 }, 5.16)
-      .to(charlie, { x: 0, rotate: 0, duration: 0.28 }, 5.46)
-      .to(arm, { rotate: -36, duration: 0.28 }, 5.5)
-      .to(arm, { rotate: 6, duration: 0.24, repeat: 2, yoyo: true }, 5.8)
-      .to(arm, { rotate: 0, duration: 0.3 }, 6.35)
+    /* ② 经典胶片倒计时 3·2·1 */
+      .set(countdown, { display: 'block' }, 0.65)
+      .to(countdown, { opacity: 1, duration: 0.28 }, 0.65);
 
-    /* ⑤ 车灯先亮，再火车穿过；车轮转、蒸汽更足、地面轻震 */
-      .to(trainLight, { opacity: 1, duration: 0.55, ease: 'power2.in' }, 5.6)
-      .set(train, { opacity: 1 }, 5.75)
-      .fromTo(train, { xPercent: -125 }, { xPercent: 116, duration: 2.3, ease: 'none' }, 5.75)
-      .fromTo(wheels, { rotate: 0 }, { rotate: 1600, duration: 2.3, ease: 'none' }, 5.75)
-      .to(charlie, { opacity: 0, x: -18, duration: 0.55, ease: 'power2.in' }, 6.15)
-      .to(puffs, {
-        opacity: 0.6, scale: 2.1, y: -30, duration: 0.85, stagger: 0.13,
-        repeat: 2, ease: 'power1.out'
-      }, 5.85)
-      .to(spotlight, { opacity: 0.42, duration: 1.5 }, 6.9)
+    [3, 2, 1].forEach(function (n, idx) {
+      var t = 0.85 + idx * 0.48;
+      tl.call(function () { cdNum.textContent = n; }, null, t)
+        .fromTo(cdNum,
+          { scale: 1.22, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.22, ease: 'power3.out' },
+          t
+        )
+        .fromTo(cdSweep,
+          { rotation: 0 },
+          { rotation: 360, duration: 0.44, ease: 'none', svgOrigin: '100 100' },
+          t
+        )
+        .to(cdNum, { opacity: 0.34, duration: 0.2, ease: 'power1.in' }, t + 0.25);
+    });
 
-    /* ⑥ 多彩卡片被「拉」出画面中央，带 3D 翻转散向四处 */
+    tl.to(countdown, {
+      opacity: 0, scale: 1.035, duration: 0.3, ease: 'power1.in'
+    }, 2.25)
+      .set(countdown, { display: 'none' }, 2.55)
+
+    /* ③ 追光从上方落下，像电影院开灯，而不是舞台特效 */
+      .to(spotlight, { opacity: 1, duration: 0.38 }, 2.38)
+      .to(spotlight, {
+        y: '0vh', scaleY: 1, duration: 0.78, ease: 'power2.inOut'
+      }, 2.45)
+      .to(poolFloor, { opacity: 0.72, duration: 0.65 }, 2.72)
+      .to(dust, { opacity: 0.72, duration: 0.8 }, 2.78)
+
+    /* ④ 海报从黑暗中缓慢浮出，再向真实卡片墙过渡 */
       .to(sprites, {
-        opacity: 1, scale: 1, duration: 0.5,
-        stagger: { each: 0.007, from: 'center' }
-      }, 7.35)
+        opacity: 1, scale: 1, duration: 0.55,
+        stagger: { each: 0.012, from: 'center' },
+        ease: 'power2.out'
+      }, 3.05)
       .to(sprites, {
-        x: function () { return (Math.random() - 0.5) * window.innerWidth * 1.6; },
-        y: function () { return (Math.random() - 0.5) * window.innerHeight * 1.5; },
-        rotate: function () { return (Math.random() - 0.5) * 100; },
-        rotateY: function () { return (Math.random() - 0.5) * 190; },
-        scale: function () { return 0.45 + Math.random() * 0.75; },
-        opacity: 0, duration: 1.2, ease: 'power2.in',
-        stagger: { each: 0.006, from: 'center' }
-      }, 7.7)
+        x: function () { return (Math.random() - 0.5) * window.innerWidth * 1.35; },
+        y: function () { return (Math.random() - 0.5) * window.innerHeight * 1.15; },
+        rotate: function () { return (Math.random() - 0.5) * 46; },
+        rotateY: function () { return (Math.random() - 0.5) * 90; },
+        scale: 0.5,
+        opacity: 0,
+        duration: 0.9,
+        ease: 'power2.inOut',
+        stagger: { each: 0.008, from: 'center' }
+      }, 3.55)
 
-    /* ⑦ 揭幕：卡片墙亮相 + 光带扫过 + 浮尘/追光收掉 */
-      .add(function () { revealWall(); }, 8.15)
-      .to(dust, { opacity: 0, duration: 0.8 }, 8.0)
-      .set(lightSweep, { opacity: 1 }, 8.25)
-      .fromTo(lightSweep, { xPercent: -140 }, { xPercent: 140, duration: 1.0, ease: 'power2.inOut' }, 8.25)
+    /* ⑤ 真正的卡片墙接管画面 */
+      .add(function () { revealWall(); }, 4.05)
+      .to(dust, { opacity: 0, duration: 0.55 }, 4.0)
+      .set(lightSweep, { opacity: 1 }, 4.08)
+      .fromTo(lightSweep,
+        { xPercent: -140 },
+        { xPercent: 140, duration: 0.8, ease: 'power2.inOut' },
+        4.08
+      )
       .to(prologue, {
-        opacity: 0, duration: 0.8, ease: 'power2.inOut',
+        opacity: 0, duration: 0.65, ease: 'power2.inOut',
         onComplete: function () { prologue.style.display = 'none'; }
-      }, 8.55)
-      .to(hud, { opacity: 1, y: 0, duration: 0.6 }, 8.85);
+      }, 4.32)
+      .to(hud, { opacity: 1, y: 0, duration: 0.5 }, 4.58);
 
-    /* 地面轻震：只在没开「减少动态效果」时加，避免不适 */
+    /* 地面轻震仅作为“胶片切入”的触感，不做连续抖动 */
     if (!reduced) {
-      tl.to(prologue, { x: 2, duration: 0.05, repeat: 12, yoyo: true, ease: 'none' }, 6.1)
-        .to(prologue, { x: 0, duration: 0.1 }, 6.75);
+      tl.to(prologue, { x: 1.5, duration: 0.045, yoyo: true, repeat: 3, ease: 'none' }, 2.42)
+        .to(prologue, { x: 0, duration: 0.08 }, 2.65);
     }
   }
 
