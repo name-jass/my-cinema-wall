@@ -10,6 +10,7 @@
 
   var stage = document.getElementById('stage');
   var world = document.getElementById('world');
+  var camera = document.getElementById('camera');
 
   var els = {};            // key -> DOM（仅视口附近，虚拟渲染）
   var order = [];          // 当前展示顺序（全部 key，仅数据）
@@ -41,6 +42,7 @@
   var watchOn = false;
   var lastWX = null, lastWY = null;
   var cinematic = { active: false, x: 0, y: 0, key: null };
+  var cameraMotion = { ready: false, x: null, y: null, rx: null, ry: null };
 
   function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -369,6 +371,93 @@
     });
 
     stage.addEventListener('pointerleave', function () { reset(hover.el); hover.el = null; });
+  }
+
+  /* ---------------------------------------------------------------- 镜头运动
+   * 不是移动卡片，而是让「镜头」轻轻跟随鼠标。
+   * 配合 world 的 3D z 深度，前后景会出现不同的视差，形成影院式空间感。
+   */
+  function bindCameraMotion() {
+    if (!camera || cameraMotion.ready) return;
+    if (window.matchMedia('(hover: none)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    cameraMotion.ready = true;
+    cameraMotion.x = gsap.quickTo(camera, 'x', { duration: 0.85, ease: 'power3.out' });
+    cameraMotion.y = gsap.quickTo(camera, 'y', { duration: 0.85, ease: 'power3.out' });
+    cameraMotion.rx = gsap.quickTo(camera, 'rotationX', { duration: 1.0, ease: 'power3.out' });
+    cameraMotion.ry = gsap.quickTo(camera, 'rotationY', { duration: 1.0, ease: 'power3.out' });
+
+    function resetCamera(duration) {
+      if (!camera) return;
+      if (duration === 0) {
+        gsap.set(camera, { x: 0, y: 0, rotationX: 0, rotationY: 0, scale: 1 });
+        return;
+      }
+      if (cameraMotion.x) cameraMotion.x(0);
+      if (cameraMotion.y) cameraMotion.y(0);
+      if (cameraMotion.rx) cameraMotion.rx(0);
+      if (cameraMotion.ry) cameraMotion.ry(0);
+      gsap.to(camera, { scale: 1, duration: duration || 0.5, ease: 'power3.out', overwrite: 'auto' });
+    }
+
+    stage.addEventListener('pointermove', function (e) {
+      if (draggable && draggable.isDragging) return;
+      var nx = (e.clientX / vw()) * 2 - 1;
+      var ny = (e.clientY / vh()) * 2 - 1;
+      var x = -nx * 18;
+      var y = -ny * 12;
+      var rx = ny * 1.15;
+      var ry = -nx * 1.55;
+      cameraMotion.x(x);
+      cameraMotion.y(y);
+      cameraMotion.rx(rx);
+      cameraMotion.ry(ry);
+    });
+
+    stage.addEventListener('pointerleave', function () { resetCamera(0.65); });
+    stage.addEventListener('pointerdown', function () {
+      if (draggable && draggable.isDragging) resetCamera(0.25);
+    });
+
+    cameraMotion.reset = resetCamera;
+  }
+
+  function resetCameraMotion(duration) {
+    if (!camera) return;
+    if (cameraMotion.reset) cameraMotion.reset(duration);
+    else if (duration === 0) gsap.set(camera, { x: 0, y: 0, rotationX: 0, rotationY: 0, scale: 1 });
+    else gsap.to(camera, { x: 0, y: 0, rotationX: 0, rotationY: 0, scale: 1, duration: duration || 0.5, ease: 'power3.out', overwrite: 'auto' });
+  }
+
+  /* 「镜头漫游」：保留墙面和卡片层级，不压暗其它卡片，只让镜头飞到某一张。
+     这是随机漫游按钮的第三层表现：像摄影机在私人影院里换座位。 */
+  function journeyTo(key, dur) {
+    var p = pos[key];
+    if (!p) return;
+    if (layoutTween && layoutTween.isActive()) layoutTween.kill();
+    resetCameraMotion(0.35);
+    var target = els[key];
+    if (!target) {
+      cull();
+      target = els[key];
+    }
+    if (camera) {
+      gsap.fromTo(camera, { scale: 1 }, { scale: 1.018, duration: 0.55, ease: 'power2.out', yoyo: true, repeat: 1 });
+    }
+    if (target) {
+      gsap.fromTo(target, { scale: 1 }, { scale: 1.035, duration: 0.42, ease: 'power2.out', yoyo: true, repeat: 1, overwrite: 'auto' });
+      gsap.fromTo(target.querySelector('.card-inner'),
+        { boxShadow: '0 0 0 0 rgba(232,185,107,0)' },
+        { boxShadow: '0 0 42px 5px rgba(232,185,107,.28)', duration: 0.5, ease: 'power2.out', yoyo: true, repeat: 1, overwrite: 'auto' }
+      );
+    }
+    layoutTween = gsap.to(world, {
+      x: clampX(vw() / 2 - p.x),
+      y: clampY(vh() / 2 - p.y),
+      duration: dur || 1.25,
+      ease: 'power3.inOut'
+    });
   }
 
   /* ---------------------------------------------------------------- 拖拽 + 惯性 */
@@ -729,6 +818,7 @@
     keysProvider = options.keys || null;
     measure();
     ensureTicker();
+    bindCameraMotion();
     bindDrag();
     bindWheel();
     bindKeys();
@@ -751,7 +841,7 @@
   window.Gallery = {
     mount: mount, render: render, refresh: refresh, addKey: addKey, removeKey: removeKey,
     updateCard: updateCard, updateCardPoster: updateCardPoster,
-    focusKey: focusKey, cinematicFocus: cinematicFocus, exitCinematicFocus: exitCinematicFocus, center: center, randomKey: randomKey, playDropIn: playDropIn,
+    focusKey: focusKey, journeyTo: journeyTo, cinematicFocus: cinematicFocus, exitCinematicFocus: exitCinematicFocus, center: center, randomKey: randomKey, playDropIn: playDropIn,
     setSort: setSort, nextSort: nextSort, sortLabel: sortLabel,
     geom: geom, isDragging: function () { return !!(draggable && draggable.isDragging); },
     /* 调试用：当前真实渲染了多少张 */
