@@ -163,7 +163,7 @@
     document.getElementById('randomBtn').addEventListener('click', function () {
       var key = Gallery.randomKey();
       if (!key) { UI.toast('卡片墙上还没有卡片'); return; }
-      Gallery.focusKey(key);
+      Gallery.journeyTo(key);
       var item = Store.byKey(key);
       if (item) UI.toast('漫游到：' + item.title);
     });
