@@ -40,6 +40,7 @@
   var tickerOn = false;
   var watchOn = false;
   var lastWX = null, lastWY = null;
+  var cinematic = { active: false, x: 0, y: 0, key: null };
 
   function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -601,6 +602,78 @@
     }
   }
 
+  /* 「镜头进入」：不是弹窗突然出现，而是先让整面墙把目标送到镜头中心。
+     原来的视口坐标会被保存，关闭详情后可以沿原路退回。 */
+  function cinematicFocus(key, done) {
+    var p = pos[key];
+    if (!p) { if (done) done(); return; }
+
+    cinematic.x = gsap.getProperty(world, 'x');
+    cinematic.y = gsap.getProperty(world, 'y');
+    cinematic.key = key;
+    cinematic.active = true;
+    stage.classList.add('cinematic-focus');
+
+    var target = els[key];
+    if (!target) {
+      cull();
+      target = els[key];
+    }
+
+    if (target) {
+      var others = [];
+      for (var k in els) if (k !== key) others.push(els[k]);
+      gsap.to(others, {
+        opacity: 0.18, scale: 0.94, duration: 0.42,
+        ease: 'power2.out', overwrite: 'auto'
+      });
+      gsap.to(target, {
+        scale: 1.055, duration: 0.65, ease: 'power3.out', overwrite: 'auto'
+      });
+      gsap.to(target.querySelector('.card-inner'), {
+        boxShadow: '0 28px 70px rgba(0,0,0,.82), 0 0 48px rgba(232,185,107,.22)',
+        duration: 0.55, ease: 'power2.out', overwrite: 'auto'
+      });
+    }
+
+    layoutTween = gsap.to(world, {
+      x: clampX(vw() / 2 - p.x),
+      y: clampY(vh() / 2 - p.y),
+      duration: 0.82,
+      ease: 'power3.inOut',
+      onComplete: function () { if (done) done(); }
+    });
+  }
+
+  function exitCinematicFocus() {
+    if (!cinematic.active) return;
+    if (layoutTween) layoutTween.kill();
+    var key = cinematic.key;
+    var target = key && els[key];
+    var others = [];
+    for (var k in els) if (k !== key) others.push(els[k]);
+
+    gsap.to(others, { opacity: 1, scale: 1, duration: 0.34, ease: 'power2.out', overwrite: 'auto' });
+    if (target) {
+      gsap.to(target, { scale: 1, duration: 0.34, ease: 'power2.out', overwrite: 'auto' });
+      gsap.to(target.querySelector('.card-inner'), {
+        boxShadow: 'var(--shadow-card), inset 0 0 0 1px rgba(255,255,255,.035)',
+        duration: 0.3, overwrite: 'auto'
+      });
+    }
+    layoutTween = gsap.to(world, {
+      x: cinematic.x, y: cinematic.y,
+      duration: 0.72, ease: 'power3.inOut',
+      onComplete: function () {
+        cinematic.active = false;
+        cinematic.key = null;
+        stage.classList.remove('cinematic-focus');
+        lastWX = null;
+        queueCull();
+      }
+    });
+  }
+
   function randomKey() {
     var list = allKeys();
     if (!list.length) return null;
@@ -678,7 +751,7 @@
   window.Gallery = {
     mount: mount, render: render, refresh: refresh, addKey: addKey, removeKey: removeKey,
     updateCard: updateCard, updateCardPoster: updateCardPoster,
-    focusKey: focusKey, center: center, randomKey: randomKey, playDropIn: playDropIn,
+    focusKey: focusKey, cinematicFocus: cinematicFocus, exitCinematicFocus: exitCinematicFocus, center: center, randomKey: randomKey, playDropIn: playDropIn,
     setSort: setSort, nextSort: nextSort, sortLabel: sortLabel,
     geom: geom, isDragging: function () { return !!(draggable && draggable.isDragging); },
     /* 调试用：当前真实渲染了多少张 */
