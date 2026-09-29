@@ -148,6 +148,13 @@ a:hover { text-decoration: underline; }
   perspective-origin: 50% 50%;
 }
 #stage.dragging { cursor: grabbing; }
+#camera {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
 #world {
   position: absolute;
   top: 0; left: 0;
@@ -643,7 +650,6 @@ a:hover { text-decoration: underline; }
   background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 22%, rgba(2,4,8,.42) 100%);
   opacity: 1;
 }
-#stage.cinematic-focus .card:not([data-key]) { opacity: .18; }
 
 /* ---------------------------------------------------------------- 详情弹窗 */
 #detailModal.cinematic .panel {
