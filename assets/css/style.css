@@ -148,6 +148,13 @@ a:hover { text-decoration: underline; }
   perspective-origin: 50% 50%;
 }
 #stage.dragging { cursor: grabbing; }
+#camera {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
 #world {
   position: absolute;
   top: 0; left: 0;
@@ -633,7 +640,26 @@ a:hover { text-decoration: underline; }
 }
 .panel-close:hover { color: var(--amber); background: rgba(255, 255, 255, .06); }
 
+/* ---------------------------------------------------------------- 电影镜头聚焦 */
+#stage.cinematic-focus::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 22%, rgba(2,4,8,.42) 100%);
+  opacity: 1;
+}
+
 /* ---------------------------------------------------------------- 详情弹窗 */
+#detailModal.cinematic .panel {
+  transform: translateY(10px) scale(.985);
+  opacity: 0;
+}
+#detailModal.cinematic.open .panel {
+  transform: none;
+  opacity: 1;
+}
 #detailModal .panel {
   width: min(860px, 96vw);
   max-height: 88vh;

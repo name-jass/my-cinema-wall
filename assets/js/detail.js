@@ -105,18 +105,21 @@
     bodyEl.scrollTop = 0;
   }
 
-  function open(key) {
+  function open(key, options) {
     if (!Store.byKey(key)) return;
+    options = options || {};
     lastFocus = document.activeElement;
     current = key;
     paint();
+    if (options.cinematic) modal.classList.add('cinematic');
     modal.classList.add('open');
     var closeBtn = modal.querySelector('.panel-close');
     if (closeBtn) closeBtn.focus({ preventScroll: true });
   }
 
   function close() {
-    modal.classList.remove('open');
+    modal.classList.remove('open', 'cinematic');
+    if (window.Gallery && Gallery.exitCinematicFocus) Gallery.exitCinematicFocus();
     current = null;
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   }

@@ -10,6 +10,7 @@
 
   var stage = document.getElementById('stage');
   var world = document.getElementById('world');
+  var camera = document.getElementById('camera');
 
   var els = {};            // key -> DOM（仅视口附近，虚拟渲染）
   var order = [];          // 当前展示顺序（全部 key，仅数据）
@@ -31,6 +32,7 @@
   var CREATE_PER_FRAME = 4;  // 每帧最多新建几张，拖得再快也不卡
   var pendingCreate = [];     // 等待建 DOM 的卡片
   var pumping = false;
+  var cullQueued = false;
 
   /* 3D 拖拽：拖动时整面墙跟着倾斜，速度衰减后自动回正 */
   var spin = { vx: 0, vy: 0 };
@@ -39,6 +41,8 @@
   var tickerOn = false;
   var watchOn = false;
   var lastWX = null, lastWY = null;
+  var cinematic = { active: false, x: 0, y: 0, key: null };
+  var cameraMotion = { ready: false, x: null, y: null, rx: null, ry: null };
 
   function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -213,6 +217,17 @@
     return out;
   }
 
+  /* 拖拽时世界每帧都在移动，但没必要每一帧立刻重建 DOM。
+     合并到下一帧执行，避免高速惯性下反复做空间剔除。 */
+  function queueCull() {
+    if (cullQueued) return;
+    cullQueued = true;
+    requestAnimationFrame(function () {
+      cullQueued = false;
+      cull();
+    });
+  }
+
   function cull() {
     var list = visibleKeys();
     if (list.length > MAX_RENDER) list = list.slice(0, MAX_RENDER);
@@ -358,6 +373,93 @@
     stage.addEventListener('pointerleave', function () { reset(hover.el); hover.el = null; });
   }
 
+  /* ---------------------------------------------------------------- 镜头运动
+   * 不是移动卡片，而是让「镜头」轻轻跟随鼠标。
+   * 配合 world 的 3D z 深度，前后景会出现不同的视差，形成影院式空间感。
+   */
+  function bindCameraMotion() {
+    if (!camera || cameraMotion.ready) return;
+    if (window.matchMedia('(hover: none)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    cameraMotion.ready = true;
+    cameraMotion.x = gsap.quickTo(camera, 'x', { duration: 0.85, ease: 'power3.out' });
+    cameraMotion.y = gsap.quickTo(camera, 'y', { duration: 0.85, ease: 'power3.out' });
+    cameraMotion.rx = gsap.quickTo(camera, 'rotationX', { duration: 1.0, ease: 'power3.out' });
+    cameraMotion.ry = gsap.quickTo(camera, 'rotationY', { duration: 1.0, ease: 'power3.out' });
+
+    function resetCamera(duration) {
+      if (!camera) return;
+      if (duration === 0) {
+        gsap.set(camera, { x: 0, y: 0, rotationX: 0, rotationY: 0, scale: 1 });
+        return;
+      }
+      if (cameraMotion.x) cameraMotion.x(0);
+      if (cameraMotion.y) cameraMotion.y(0);
+      if (cameraMotion.rx) cameraMotion.rx(0);
+      if (cameraMotion.ry) cameraMotion.ry(0);
+      gsap.to(camera, { scale: 1, duration: duration || 0.5, ease: 'power3.out', overwrite: 'auto' });
+    }
+
+    stage.addEventListener('pointermove', function (e) {
+      if (draggable && draggable.isDragging) return;
+      var nx = (e.clientX / vw()) * 2 - 1;
+      var ny = (e.clientY / vh()) * 2 - 1;
+      var x = -nx * 18;
+      var y = -ny * 12;
+      var rx = ny * 1.15;
+      var ry = -nx * 1.55;
+      cameraMotion.x(x);
+      cameraMotion.y(y);
+      cameraMotion.rx(rx);
+      cameraMotion.ry(ry);
+    });
+
+    stage.addEventListener('pointerleave', function () { resetCamera(0.65); });
+    stage.addEventListener('pointerdown', function () {
+      if (draggable && draggable.isDragging) resetCamera(0.25);
+    });
+
+    cameraMotion.reset = resetCamera;
+  }
+
+  function resetCameraMotion(duration) {
+    if (!camera) return;
+    if (cameraMotion.reset) cameraMotion.reset(duration);
+    else if (duration === 0) gsap.set(camera, { x: 0, y: 0, rotationX: 0, rotationY: 0, scale: 1 });
+    else gsap.to(camera, { x: 0, y: 0, rotationX: 0, rotationY: 0, scale: 1, duration: duration || 0.5, ease: 'power3.out', overwrite: 'auto' });
+  }
+
+  /* 「镜头漫游」：保留墙面和卡片层级，不压暗其它卡片，只让镜头飞到某一张。
+     这是随机漫游按钮的第三层表现：像摄影机在私人影院里换座位。 */
+  function journeyTo(key, dur) {
+    var p = pos[key];
+    if (!p) return;
+    if (layoutTween && layoutTween.isActive()) layoutTween.kill();
+    resetCameraMotion(0.35);
+    var target = els[key];
+    if (!target) {
+      cull();
+      target = els[key];
+    }
+    if (camera) {
+      gsap.fromTo(camera, { scale: 1 }, { scale: 1.018, duration: 0.55, ease: 'power2.out', yoyo: true, repeat: 1 });
+    }
+    if (target) {
+      gsap.fromTo(target, { scale: 1 }, { scale: 1.035, duration: 0.42, ease: 'power2.out', yoyo: true, repeat: 1, overwrite: 'auto' });
+      gsap.fromTo(target.querySelector('.card-inner'),
+        { boxShadow: '0 0 0 0 rgba(232,185,107,0)' },
+        { boxShadow: '0 0 42px 5px rgba(232,185,107,.28)', duration: 0.5, ease: 'power2.out', yoyo: true, repeat: 1, overwrite: 'auto' }
+      );
+    }
+    layoutTween = gsap.to(world, {
+      x: clampX(vw() / 2 - p.x),
+      y: clampY(vh() / 2 - p.y),
+      duration: dur || 1.25,
+      ease: 'power3.inOut'
+    });
+  }
+
   /* ---------------------------------------------------------------- 拖拽 + 惯性 */
 
   /* 每一帧：① 墙随拖拽速度倾斜、松手回正；② 监视世界坐标，
@@ -370,24 +472,38 @@
       spin.vy *= 0.88;
 
       var wantX, wantY;
-      if (Math.abs(spin.vx) < 0.05 && Math.abs(spin.vy) < 0.05) {
-        if (tilt.x === 0 && tilt.y === 0) { /* 已回正 */ }
-        else { wantX = 0; wantY = 0; tilt.x = 0; tilt.y = 0; gsap.set(world, { rotationX: 0, rotationY: 0 }); }
+      var speed = Math.sqrt(spin.vx * spin.vx + spin.vy * spin.vy);
+
+      if (speed < 0.05) {
+        if (tilt.x !== 0 || tilt.y !== 0) {
+          tilt.x = 0;
+          tilt.y = 0;
+          gsap.set(world, { rotationX: 0, rotationY: 0, rotationZ: 0 });
+        }
       } else {
         wantY = clampNum(-spin.vx * 0.55, -9, 9);
         wantX = clampNum(spin.vy * 0.45, -6, 6);
-        if (Math.abs(wantX - tilt.x) >= 0.02 || Math.abs(wantY - tilt.y) >= 0.02) {
-          tilt.x = wantX; tilt.y = wantY;
-          gsap.set(world, { rotationX: wantX, rotationY: wantY });
+        var wantZ = clampNum((spin.vx + spin.vy) * 0.075, -2.8, 2.8);
+
+        if (Math.abs(wantX - tilt.x) >= 0.02 ||
+            Math.abs(wantY - tilt.y) >= 0.02) {
+          tilt.x = wantX;
+          tilt.y = wantY;
+          gsap.set(world, {
+            rotationX: wantX,
+            rotationY: wantY,
+            rotationZ: wantZ
+          });
         }
       }
 
-      /* 虚拟渲染：世界在动 → 视口变了 → 重新剔除 */
+      /* 虚拟渲染：世界在动 → 视口变了 → 下一帧统一剔除 */
       if (watchOn) {
         var wx = gsap.getProperty(world, 'x'), wy = gsap.getProperty(world, 'y');
         if (lastWX === null || Math.abs(wx - lastWX) > 2 || Math.abs(wy - lastWY) > 2) {
-          lastWX = wx; lastWY = wy;
-          cull();
+          lastWX = wx;
+          lastWY = wy;
+          queueCull();
         }
       }
     });
@@ -406,6 +522,7 @@
         gsap.killTweensOf(world);
         lastPos.x = this.x; lastPos.y = this.y;
         spin.vx = 0; spin.vy = 0;
+        gsap.set(world, { rotationZ: 0 });
         stage.classList.add('dragging');
       },
       onDragStart: function () {
@@ -417,8 +534,11 @@
         spin.vy = this.y - lastPos.y;
         lastPos.x = this.x; lastPos.y = this.y;
       },
-      onRelease: function () { setTimeout(function () { stage.classList.remove('dragging'); }, 40); },
+      onRelease: function () {
+        setTimeout(function () { stage.classList.remove('dragging'); }, 40);
+      },
       onDragEnd: function () {
+        /* 惯性继续时由 ticker 驱动倾斜；速度归零后自动回正 */
         setTimeout(function () { stage.classList.remove('dragging'); }, 40);
       },
       bounds: dragBounds()
@@ -571,6 +691,78 @@
     }
   }
 
+  /* 「镜头进入」：不是弹窗突然出现，而是先让整面墙把目标送到镜头中心。
+     原来的视口坐标会被保存，关闭详情后可以沿原路退回。 */
+  function cinematicFocus(key, done) {
+    var p = pos[key];
+    if (!p) { if (done) done(); return; }
+
+    cinematic.x = gsap.getProperty(world, 'x');
+    cinematic.y = gsap.getProperty(world, 'y');
+    cinematic.key = key;
+    cinematic.active = true;
+    stage.classList.add('cinematic-focus');
+
+    var target = els[key];
+    if (!target) {
+      cull();
+      target = els[key];
+    }
+
+    if (target) {
+      var others = [];
+      for (var k in els) if (k !== key) others.push(els[k]);
+      gsap.to(others, {
+        opacity: 0.18, scale: 0.94, duration: 0.42,
+        ease: 'power2.out', overwrite: 'auto'
+      });
+      gsap.to(target, {
+        scale: 1.055, duration: 0.65, ease: 'power3.out', overwrite: 'auto'
+      });
+      gsap.to(target.querySelector('.card-inner'), {
+        boxShadow: '0 28px 70px rgba(0,0,0,.82), 0 0 48px rgba(232,185,107,.22)',
+        duration: 0.55, ease: 'power2.out', overwrite: 'auto'
+      });
+    }
+
+    layoutTween = gsap.to(world, {
+      x: clampX(vw() / 2 - p.x),
+      y: clampY(vh() / 2 - p.y),
+      duration: 0.82,
+      ease: 'power3.inOut',
+      onComplete: function () { if (done) done(); }
+    });
+  }
+
+  function exitCinematicFocus() {
+    if (!cinematic.active) return;
+    if (layoutTween) layoutTween.kill();
+    var key = cinematic.key;
+    var target = key && els[key];
+    var others = [];
+    for (var k in els) if (k !== key) others.push(els[k]);
+
+    gsap.to(others, { opacity: 1, scale: 1, duration: 0.34, ease: 'power2.out', overwrite: 'auto' });
+    if (target) {
+      gsap.to(target, { scale: 1, duration: 0.34, ease: 'power2.out', overwrite: 'auto' });
+      gsap.to(target.querySelector('.card-inner'), {
+        boxShadow: 'var(--shadow-card), inset 0 0 0 1px rgba(255,255,255,.035)',
+        duration: 0.3, overwrite: 'auto'
+      });
+    }
+    layoutTween = gsap.to(world, {
+      x: cinematic.x, y: cinematic.y,
+      duration: 0.72, ease: 'power3.inOut',
+      onComplete: function () {
+        cinematic.active = false;
+        cinematic.key = null;
+        stage.classList.remove('cinematic-focus');
+        lastWX = null;
+        queueCull();
+      }
+    });
+  }
+
   function randomKey() {
     var list = allKeys();
     if (!list.length) return null;
@@ -626,6 +818,7 @@
     keysProvider = options.keys || null;
     measure();
     ensureTicker();
+    bindCameraMotion();
     bindDrag();
     bindWheel();
     bindKeys();
@@ -648,7 +841,7 @@
   window.Gallery = {
     mount: mount, render: render, refresh: refresh, addKey: addKey, removeKey: removeKey,
     updateCard: updateCard, updateCardPoster: updateCardPoster,
-    focusKey: focusKey, center: center, randomKey: randomKey, playDropIn: playDropIn,
+    focusKey: focusKey, journeyTo: journeyTo, cinematicFocus: cinematicFocus, exitCinematicFocus: exitCinematicFocus, center: center, randomKey: randomKey, playDropIn: playDropIn,
     setSort: setSort, nextSort: nextSort, sortLabel: sortLabel,
     geom: geom, isDragging: function () { return !!(draggable && draggable.isDragging); },
     /* 调试用：当前真实渲染了多少张 */
