@@ -148,7 +148,15 @@
     } else if (act === 'cover') {
       Covers.open(key);
     } else {
-      Detail.open(key);
+      if (Store.isFeatured(key)) {
+        Gallery.cinematicFocus(key, function () { Detail.open(key, { cinematic: true }); });
+      } else {
+        Gallery.addKey(key, { focus: false });
+        setTimeout(function () {
+          Gallery.cinematicFocus(key, function () { Detail.open(key, { cinematic: true }); });
+        }, 80);
+      }
+      close();
     }
   });
 
