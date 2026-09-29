@@ -31,6 +31,7 @@
   var CREATE_PER_FRAME = 4;  // 每帧最多新建几张，拖得再快也不卡
   var pendingCreate = [];     // 等待建 DOM 的卡片
   var pumping = false;
+  var cullQueued = false;
 
   /* 3D 拖拽：拖动时整面墙跟着倾斜，速度衰减后自动回正 */
   var spin = { vx: 0, vy: 0 };
@@ -213,6 +214,17 @@
     return out;
   }
 
+  /* 拖拽时世界每帧都在移动，但没必要每一帧立刻重建 DOM。
+     合并到下一帧执行，避免高速惯性下反复做空间剔除。 */
+  function queueCull() {
+    if (cullQueued) return;
+    cullQueued = true;
+    requestAnimationFrame(function () {
+      cullQueued = false;
+      cull();
+    });
+  }
+
   function cull() {
     var list = visibleKeys();
     if (list.length > MAX_RENDER) list = list.slice(0, MAX_RENDER);
@@ -370,24 +382,38 @@
       spin.vy *= 0.88;
 
       var wantX, wantY;
-      if (Math.abs(spin.vx) < 0.05 && Math.abs(spin.vy) < 0.05) {
-        if (tilt.x === 0 && tilt.y === 0) { /* 已回正 */ }
-        else { wantX = 0; wantY = 0; tilt.x = 0; tilt.y = 0; gsap.set(world, { rotationX: 0, rotationY: 0 }); }
+      var speed = Math.sqrt(spin.vx * spin.vx + spin.vy * spin.vy);
+
+      if (speed < 0.05) {
+        if (tilt.x !== 0 || tilt.y !== 0) {
+          tilt.x = 0;
+          tilt.y = 0;
+          gsap.set(world, { rotationX: 0, rotationY: 0, rotationZ: 0 });
+        }
       } else {
         wantY = clampNum(-spin.vx * 0.55, -9, 9);
         wantX = clampNum(spin.vy * 0.45, -6, 6);
-        if (Math.abs(wantX - tilt.x) >= 0.02 || Math.abs(wantY - tilt.y) >= 0.02) {
-          tilt.x = wantX; tilt.y = wantY;
-          gsap.set(world, { rotationX: wantX, rotationY: wantY });
+        var wantZ = clampNum((spin.vx + spin.vy) * 0.075, -2.8, 2.8);
+
+        if (Math.abs(wantX - tilt.x) >= 0.02 ||
+            Math.abs(wantY - tilt.y) >= 0.02) {
+          tilt.x = wantX;
+          tilt.y = wantY;
+          gsap.set(world, {
+            rotationX: wantX,
+            rotationY: wantY,
+            rotationZ: wantZ
+          });
         }
       }
 
-      /* 虚拟渲染：世界在动 → 视口变了 → 重新剔除 */
+      /* 虚拟渲染：世界在动 → 视口变了 → 下一帧统一剔除 */
       if (watchOn) {
         var wx = gsap.getProperty(world, 'x'), wy = gsap.getProperty(world, 'y');
         if (lastWX === null || Math.abs(wx - lastWX) > 2 || Math.abs(wy - lastWY) > 2) {
-          lastWX = wx; lastWY = wy;
-          cull();
+          lastWX = wx;
+          lastWY = wy;
+          queueCull();
         }
       }
     });
@@ -406,6 +432,7 @@
         gsap.killTweensOf(world);
         lastPos.x = this.x; lastPos.y = this.y;
         spin.vx = 0; spin.vy = 0;
+        gsap.set(world, { rotationZ: 0 });
         stage.classList.add('dragging');
       },
       onDragStart: function () {
@@ -417,8 +444,11 @@
         spin.vy = this.y - lastPos.y;
         lastPos.x = this.x; lastPos.y = this.y;
       },
-      onRelease: function () { setTimeout(function () { stage.classList.remove('dragging'); }, 40); },
+      onRelease: function () {
+        setTimeout(function () { stage.classList.remove('dragging'); }, 40);
+      },
       onDragEnd: function () {
+        /* 惯性继续时由 ticker 驱动倾斜；速度归零后自动回正 */
         setTimeout(function () { stage.classList.remove('dragging'); }, 40);
       },
       bounds: dragBounds()
