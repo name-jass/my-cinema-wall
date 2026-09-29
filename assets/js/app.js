@@ -119,7 +119,7 @@
         keys: UI.wallKeys,
         onOpenDetail: function (key) {
           Detail.setSequence(UI.wallKeys());
-          Detail.open(key);
+          Gallery.cinematicFocus(key, function () { Detail.open(key, { cinematic: true }); });
         }
       });
 
